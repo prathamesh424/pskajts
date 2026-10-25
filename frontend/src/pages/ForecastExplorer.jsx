@@ -1,11 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ReferenceLine
+  ResponsiveContainer
 } from 'recharts';
-import { Layers, Calendar, ArrowUpRight, ArrowDownRight, CheckCircle2, ChevronRight } from 'lucide-react';
+import { Calendar, ArrowUpRight, ArrowDownRight, ChevronRight } from 'lucide-react';
 import { fetchForecastRevisions } from '../api';
-import { format, parseISO } from 'date-fns';
 
 const NOTABLE_DATES = [
   { date: '2026-01-24', label: 'Jan 24: Storm Éowyn (Peak Volatility)' },
@@ -15,15 +14,43 @@ const NOTABLE_DATES = [
 ];
 
 const ALL_JAN_DATES = Array.from({ length: 31 }, (_, i) => {
-  const d = new Date(2026, 0, i + 1);
+  const dayNum = String(i + 1).padStart(2, '0');
   return {
-    value: format(d, 'yyyy-MM-dd'),
-    label: format(d, 'yyyy-MM-dd (EEE)'),
+    value: `2026-01-${dayNum}`,
+    label: `2026-01-${dayNum}`,
   };
 });
 
+/**
+ * Timezone-agnostic UTC hour extractor.
+ * e.g. "2026-01-08T14:00:00Z" or "2026-01-08T14:00:00+00:00" -> "14:00"
+ */
+function getUtcHour(isoStr) {
+  if (!isoStr) return '';
+  const tIdx = isoStr.indexOf('T');
+  if (tIdx !== -1) {
+    return isoStr.substring(tIdx + 1, tIdx + 6);
+  }
+  return '';
+}
+
+/**
+ * Timezone-agnostic UTC label formatter.
+ */
+function formatUtcDateTime(isoStr) {
+  if (!isoStr) return '';
+  const clean = isoStr.replace('+00:00', 'Z');
+  const d = new Date(clean);
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = months[d.getUTCMonth()];
+  const day = d.getUTCDate();
+  const hour = String(d.getUTCHours()).padStart(2, '0');
+  const min = String(d.getUTCMinutes()).padStart(2, '0');
+  return `${month} ${day}, ${hour}:${min}`;
+}
+
 export default function ForecastExplorer() {
-  const [selectedDate, setSelectedDate] = useState('2026-01-24');
+  const [selectedDate, setSelectedDate] = useState('2026-01-08');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -41,12 +68,20 @@ export default function ForecastExplorer() {
       const res = await fetchForecastRevisions(date);
       setData(res);
 
-      // Default select the gate closure revision (closest to D-1 11:00 UTC) or latest
       if (res.revisions?.length) {
         const uniqueTimes = [...new Set(res.revisions.map(r => r.publish_time))].sort();
-        // Pick revision closest to 11:00 on D-1 if possible, or the middle/latest
-        const gateCandidate = uniqueTimes.find(t => t.includes('10:') || t.includes('11:')) || uniqueTimes[Math.floor(uniqueTimes.length / 2)];
-        setSelectedRevisionTime(gateCandidate);
+
+        // Calculate D-1 11:00 UTC target
+        const dateParts = date.split('-');
+        const year = parseInt(dateParts[0], 10);
+        const month = parseInt(dateParts[1], 10) - 1;
+        const day = parseInt(dateParts[2], 10);
+        const dMinus1 = new Date(Date.UTC(year, month, day - 1, 11, 0, 0));
+        const gateTargetISO = dMinus1.toISOString();
+
+        const beforeGate = uniqueTimes.filter(t => t <= gateTargetISO);
+        const bestGate = beforeGate.length ? beforeGate[beforeGate.length - 1] : uniqueTimes[0];
+        setSelectedRevisionTime(bestGate);
       }
     } catch (err) {
       setError(err.message || 'Failed loading forecast revisions');
@@ -56,36 +91,32 @@ export default function ForecastExplorer() {
   }
 
   // Parse and build clean chart data
-  const { chartData, revisionsMeta, gateRevisionTime, actualStats } = useMemo(() => {
+  const { chartData, revisionsMeta, gateRevisionTime } = useMemo(() => {
     if (!data || !data.revisions?.length) {
-      return { chartData: [], revisionsMeta: [], gateRevisionTime: null, actualStats: null };
+      return { chartData: [], revisionsMeta: [], gateRevisionTime: null };
     }
 
     const uniquePublishTimes = [...new Set(data.revisions.map(r => r.publish_time))].sort();
 
-    // Identify the Gate Closure revision: latest published <= D-1 11:00 UTC
-    // For date YYYY-MM-DD, D-1 11:00
-    const deliveryDt = parseISO(selectedDate);
-    const dMinus1 = new Date(deliveryDt);
-    dMinus1.setDate(dMinus1.getDate() - 1);
-    const gateTargetISO = `${format(dMinus1, 'yyyy-MM-dd')}T11:00:00Z`;
+    // Identify Gate Closure revision: latest published <= D-1 11:00 UTC
+    const dateParts = selectedDate.split('-');
+    const year = parseInt(dateParts[0], 10);
+    const month = parseInt(dateParts[1], 10) - 1;
+    const day = parseInt(dateParts[2], 10);
+    const dMinus1 = new Date(Date.UTC(year, month, day - 1, 11, 0, 0));
+    const gateTargetISO = dMinus1.toISOString();
 
-    const candidatesBeforeGate = uniquePublishTimes.filter(t => t <= gateTargetISO);
-    const gateTime = candidatesBeforeGate.length
-      ? candidatesBeforeGate[candidatesBeforeGate.length - 1]
-      : uniquePublishTimes[0];
+    const beforeGate = uniquePublishTimes.filter(t => t <= gateTargetISO);
+    const gateTime = beforeGate.length ? beforeGate[beforeGate.length - 1] : uniquePublishTimes[0];
 
-    // Compute actuals stats
+    // Build actuals map keyed by UTC hour "HH:00"
     const actualMap = {};
-    const actualVals = [];
     data.actuals.forEach(a => {
-      const h = format(parseISO(a.start_time), 'HH:mm');
-      actualMap[h] = Math.round(a.generation);
-      actualVals.push(a.generation);
+      const h = getUtcHour(a.start_time);
+      if (h) {
+        actualMap[h] = Math.round(a.generation);
+      }
     });
-
-    const avgActual = actualVals.length ? Math.round(actualVals.reduce((a, b) => a + b, 0) / actualVals.length) : 0;
-    const peakActual = actualVals.length ? Math.round(Math.max(...actualVals)) : 0;
 
     // Process revision metadata
     const revsList = uniquePublishTimes.map((pTime, idx) => {
@@ -93,22 +124,21 @@ export default function ForecastExplorer() {
       const genVals = recordsForTime.map(r => r.generation);
       const avgGen = genVals.length ? Math.round(genVals.reduce((a, b) => a + b, 0) / genVals.length) : 0;
 
-      // Compute MAE against actuals
+      // Compute MAE and Bias against actuals
       let errSum = 0;
+      let biasSum = 0;
       let count = 0;
       recordsForTime.forEach(r => {
-        const h = format(parseISO(r.start_time), 'HH:mm');
+        const h = getUtcHour(r.start_time);
         if (actualMap[h] != null) {
-          errSum += Math.abs(r.generation - actualMap[h]);
+          const diff = r.generation - actualMap[h];
+          errSum += Math.abs(diff);
+          biasSum += diff;
           count++;
         }
       });
       const mae = count ? Math.round(errSum / count) : 0;
-      const bias = count ? Math.round(recordsForTime.reduce((acc, r) => {
-        const h = format(parseISO(r.start_time), 'HH:mm');
-        return acc + (r.generation - (actualMap[h] || 0));
-      }, 0) / count) : 0;
-
+      const bias = count ? Math.round(biasSum / count) : 0;
       const isGate = pTime === gateTime;
 
       // Delta vs previous revision
@@ -121,44 +151,42 @@ export default function ForecastExplorer() {
 
       return {
         publishTime: pTime,
-        label: format(parseISO(pTime), 'MMM d, HH:mm'),
-        shortLabel: format(parseISO(pTime), 'd/M HH:mm'),
+        label: formatUtcDateTime(pTime),
         avgGen,
         mae,
         bias,
         isGate,
         prevDiff,
-        hoursOut: recordsForTime[0]?.hours_before_delivery || 0,
       };
     });
 
-    // Build focused chart data (Only Actual + Selected Revision + Optional Gate Closure)
+    // Active revision and Gate revision map
     const activeTime = selectedRevisionTime || gateTime;
+    const activeRevMap = {};
+    data.revisions.filter(r => r.publish_time === activeTime).forEach(r => {
+      const h = getUtcHour(r.start_time);
+      if (h) activeRevMap[h] = Math.round(r.generation);
+    });
+
+    const gateRevMap = {};
+    data.revisions.filter(r => r.publish_time === gateTime).forEach(r => {
+      const h = getUtcHour(r.start_time);
+      if (h) gateRevMap[h] = Math.round(r.generation);
+    });
+
+    // Build 24-hour chart rows
     const rows = [];
     for (let h = 0; h < 24; h++) {
       const hourStr = `${String(h).padStart(2, '0')}:00`;
-      const actualVal = actualMap[hourStr] || 0;
-
-      // Selected revision value
-      const revRecord = data.revisions.find(
-        r => r.publish_time === activeTime && format(parseISO(r.start_time), 'HH:mm') === hourStr
-      );
-      const selectedGen = revRecord ? Math.round(revRecord.generation) : null;
-
-      // Gate revision value
-      const gateRecord = data.revisions.find(
-        r => r.publish_time === gateTime && format(parseISO(r.start_time), 'HH:mm') === hourStr
-      );
-      const gateGen = gateRecord ? Math.round(gateRecord.generation) : null;
-
-      const error = selectedGen != null ? selectedGen - actualVal : null;
+      const actualVal = actualMap[hourStr] != null ? actualMap[hourStr] : null;
+      const selectedGen = activeRevMap[hourStr] != null ? activeRevMap[hourStr] : null;
+      const gateGen = gateRevMap[hourStr] != null ? gateRevMap[hourStr] : null;
 
       rows.push({
         hour: hourStr,
         actual: actualVal,
         selectedForecast: selectedGen,
         gateForecast: gateGen,
-        error,
       });
     }
 
@@ -166,11 +194,9 @@ export default function ForecastExplorer() {
       chartData: rows,
       revisionsMeta: revsList,
       gateRevisionTime: gateTime,
-      actualStats: { avgActual, peakActual, count: uniquePublishTimes.length },
     };
   }, [data, selectedDate, selectedRevisionTime]);
 
-  // Current active revision metadata
   const currentActiveMeta = useMemo(() => {
     return revisionsMeta.find(r => r.publishTime === selectedRevisionTime) || revisionsMeta[0];
   }, [revisionsMeta, selectedRevisionTime]);
@@ -321,6 +347,7 @@ export default function ForecastExplorer() {
                         tickLine={false}
                         axisLine={false}
                         tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+                        domain={[0, 'auto']}
                       />
                       <Tooltip content={<StudioTooltip />} />
 
@@ -333,6 +360,7 @@ export default function ForecastExplorer() {
                         strokeWidth={2.5}
                         fill="url(#actualGradClean)"
                         dot={false}
+                        connectNulls
                         isAnimationActive={false}
                       />
 
@@ -345,6 +373,7 @@ export default function ForecastExplorer() {
                         strokeWidth={2}
                         strokeDasharray="4 3"
                         dot={false}
+                        connectNulls
                         isAnimationActive={false}
                       />
 
@@ -358,6 +387,7 @@ export default function ForecastExplorer() {
                           strokeWidth={1.5}
                           strokeDasharray="2 2"
                           dot={false}
+                          connectNulls
                           isAnimationActive={false}
                         />
                       )}
@@ -444,28 +474,34 @@ function StudioTooltip({ active, payload, label }) {
   return (
     <div className="clean-tooltip">
       <div className="tooltip-title">{label} UTC</div>
-      <div className="tooltip-line">
-        <span style={{ color: 'var(--color-actual)' }}>Actual:</span>
-        <span style={{ fontWeight: 600, color: 'var(--text-white)' }}>{actual?.toLocaleString()} MW</span>
-      </div>
-      <div className="tooltip-line">
-        <span style={{ color: 'var(--color-forecast)' }}>Active Rev:</span>
-        <span style={{ fontWeight: 600, color: 'var(--text-white)' }}>{forecast?.toLocaleString()} MW</span>
-      </div>
+      {actual != null && (
+        <div className="tooltip-line">
+          <span style={{ color: 'var(--color-actual)' }}>Actual:</span>
+          <span style={{ fontWeight: 600, color: 'var(--text-white)' }}>{actual?.toLocaleString()} MW</span>
+        </div>
+      )}
+      {forecast != null && (
+        <div className="tooltip-line">
+          <span style={{ color: 'var(--color-forecast)' }}>Active Rev:</span>
+          <span style={{ fontWeight: 600, color: 'var(--text-white)' }}>{forecast?.toLocaleString()} MW</span>
+        </div>
+      )}
       {gate != null && (
         <div className="tooltip-line">
           <span style={{ color: '#f59e0b' }}>Gate Ref:</span>
           <span>{gate?.toLocaleString()} MW</span>
         </div>
       )}
-      <div className="tooltip-line" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 4, marginTop: 4 }}>
-        <span style={{ color: diff > 0 ? 'var(--color-warning)' : 'var(--color-actual)' }}>
-          {diff > 0 ? 'Over-forecast:' : 'Under-forecast:'}
-        </span>
-        <span style={{ fontWeight: 600, color: diff > 0 ? 'var(--color-warning)' : 'var(--color-actual)' }}>
-          {diff > 0 ? `+${diff.toLocaleString()}` : diff.toLocaleString()} MW
-        </span>
-      </div>
+      {forecast != null && actual != null && (
+        <div className="tooltip-line" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 4, marginTop: 4 }}>
+          <span style={{ color: diff > 0 ? 'var(--color-warning)' : 'var(--color-actual)' }}>
+            {diff > 0 ? 'Over-forecast:' : 'Under-forecast:'}
+          </span>
+          <span style={{ fontWeight: 600, color: diff > 0 ? 'var(--color-warning)' : 'var(--color-actual)' }}>
+            {diff > 0 ? `+${diff.toLocaleString()}` : diff.toLocaleString()} MW
+          </span>
+        </div>
+      )}
     </div>
   );
 }
