@@ -63,6 +63,56 @@ body {
   min-height: 100vh;
 }
 
+/* --- Global Dark Carbon Scrollbars --- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #26262e #0d0d10;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0d0d10 !important;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #27272f !important;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46 !important;
+}
+
+::-webkit-scrollbar-corner {
+  background: #0d0d10 !important;
+}
+
+.dark-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #27272f #0d0d10;
+}
+
+.dark-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dark-scrollbar::-webkit-scrollbar-track {
+  background: #0d0d10 !important;
+}
+
+.dark-scrollbar::-webkit-scrollbar-thumb {
+  background: #27272f !important;
+  border-radius: 3px;
+}
+
+.dark-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46 !important;
+}
+
 .font-mono {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;

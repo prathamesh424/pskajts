@@ -5,7 +5,6 @@ import {
 } from 'recharts';
 import { Filter } from 'lucide-react';
 import { fetchForecastVsActual, fetchAccuracySummary } from '../api';
-import { format, parseISO } from 'date-fns';
 
 const DATE_PRESETS = [
   { id: 'all', label: 'FULL MONTH (JAN 1-31)', start: 0, end: 744 },
@@ -14,6 +13,24 @@ const DATE_PRESETS = [
   { id: 'storm', label: 'STORM EVENT (JAN 22-26)', start: 504, end: 624 },
   { id: 'w4', label: 'WEEK 4 (JAN 27-31)', start: 624, end: 744 },
 ];
+
+/**
+ * Timezone-agnostic UTC formatter.
+ */
+function getUtcTickMeta(isoStr) {
+  if (!isoStr) return { full: '', dateLabel: '', dayHour: '' };
+  const clean = isoStr.replace('+00:00', 'Z');
+  const d = new Date(clean);
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const m = months[d.getUTCMonth()];
+  const day = d.getUTCDate();
+  const hour = String(d.getUTCHours()).padStart(2, '0');
+  return {
+    full: `${m} ${day}, ${hour}:00`,
+    dateLabel: `${m} ${day}`,
+    dayHour: `${day} ${m} ${hour}:00`,
+  };
+}
 
 export default function Dashboard() {
   const [rawData, setRawData] = useState([]);
@@ -35,11 +52,15 @@ export default function Dashboard() {
         fetchAccuracySummary(),
       ]);
 
-      const formatted = tsRes.data.map((d) => ({
-        ...d,
-        time: format(parseISO(d.start_time), 'MMM d HH:mm'),
-        shortTime: format(parseISO(d.start_time), 'd/M HH:mm'),
-      }));
+      const formatted = tsRes.data.map((d) => {
+        const meta = getUtcTickMeta(d.start_time);
+        return {
+          ...d,
+          time: meta.full,
+          dateLabel: meta.dateLabel,
+          displayTick: meta.dayHour,
+        };
+      });
 
       setRawData(formatted);
       setSummary(sumRes);
@@ -56,6 +77,26 @@ export default function Dashboard() {
     if (!preset || preset.id === 'all') return rawData;
     return rawData.slice(preset.start, preset.end);
   }, [rawData, activePreset]);
+
+  // Clean, non-overlapping tick interval based on active view window
+  const xAxisInterval = useMemo(() => {
+    const len = displayData.length;
+    if (len > 500) return 71; // ~10 clean ticks across 744 hours (every 3 days)
+    if (len > 250) return 47; // ~7 ticks across 336 hours (every 2 days)
+    if (len > 100) return 23; // ~7 ticks across 168 hours (every 24 hours)
+    if (len > 40) return 11;  // ~8-10 ticks across 96-120 hours (every 12 hours)
+    return 3;                 // every 4 hours for small windows
+  }, [displayData.length]);
+
+  const formatXAxisTick = (val) => {
+    if (!val) return '';
+    // If viewing month-long window, show concise "Jan 1", "Jan 4", etc.
+    if (displayData.length > 250) {
+      const parts = val.split(' ');
+      if (parts.length >= 2) return `${parts[1]} ${parts[0]}`;
+    }
+    return val;
+  };
 
   const stats = useMemo(() => {
     if (!displayData.length) return null;
@@ -185,9 +226,9 @@ export default function Dashboard() {
         </div>
 
         <div className="clean-panel-body">
-          <div style={{ width: '100%', height: 380 }}>
+          <div style={{ width: '100%', height: 390 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={displayData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <ComposedChart data={displayData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
                 <defs>
                   <linearGradient id="actualFillNeutral" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.12} />
@@ -196,10 +237,12 @@ export default function Dashboard() {
                 </defs>
                 <CartesianGrid strokeDasharray="2 2" stroke="var(--border-subtle)" />
                 <XAxis
-                  dataKey="shortTime"
+                  dataKey="displayTick"
                   tick={{ fill: '#71717a', fontSize: 10, fontFamily: 'var(--font-mono)' }}
                   tickLine={false}
-                  interval="preserveStartEnd"
+                  interval={xAxisInterval}
+                  tickFormatter={formatXAxisTick}
+                  dy={4}
                 />
                 <YAxis
                   tick={{ fill: '#71717a', fontSize: 10, fontFamily: 'var(--font-mono)' }}
@@ -232,11 +275,12 @@ export default function Dashboard() {
                 />
 
                 <Brush
-                  dataKey="shortTime"
-                  height={22}
+                  dataKey="displayTick"
+                  height={20}
                   stroke="var(--border-hover)"
                   fill="var(--bg-panel)"
                   tickFormatter={() => ''}
+                  y={352}
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -254,15 +298,17 @@ export default function Dashboard() {
         </div>
 
         <div className="clean-panel-body">
-          <div style={{ width: '100%', height: 200 }}>
+          <div style={{ width: '100%', height: 210 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={displayData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+              <ComposedChart data={displayData} margin={{ top: 5, right: 10, left: 0, bottom: 15 }}>
                 <CartesianGrid strokeDasharray="2 2" stroke="var(--border-subtle)" />
                 <XAxis
-                  dataKey="shortTime"
+                  dataKey="displayTick"
                   tick={{ fill: '#71717a', fontSize: 10, fontFamily: 'var(--font-mono)' }}
                   tickLine={false}
-                  interval="preserveStartEnd"
+                  interval={xAxisInterval}
+                  tickFormatter={formatXAxisTick}
+                  dy={4}
                 />
                 <YAxis
                   tick={{ fill: '#71717a', fontSize: 10, fontFamily: 'var(--font-mono)' }}
@@ -291,15 +337,16 @@ export default function Dashboard() {
   );
 }
 
-function CustomChartTooltip({ active, payload, label }) {
+function CustomChartTooltip({ active, payload }) {
   if (!active || !payload?.length) return null;
+  const d = payload[0]?.payload;
   const actual = payload.find(p => p.dataKey === 'actual_generation')?.value;
   const forecast = payload.find(p => p.dataKey === 'forecast_generation')?.value;
   const delta = forecast != null && actual != null ? forecast - actual : 0;
 
   return (
     <div className="clean-tooltip">
-      <div className="tooltip-title">{label} UTC</div>
+      <div className="tooltip-title">{d?.time || d?.displayTick} UTC</div>
       <div className="tooltip-line">
         <span style={{ color: 'var(--color-actual)' }}>Actual Outturn:</span>
         <span style={{ fontWeight: 600, color: 'var(--text-white)' }}>{actual?.toLocaleString()} MW</span>
@@ -320,14 +367,15 @@ function CustomChartTooltip({ active, payload, label }) {
   );
 }
 
-function CustomErrorTooltip({ active, payload, label }) {
+function CustomErrorTooltip({ active, payload }) {
   if (!active || !payload?.length) return null;
+  const d = payload[0]?.payload;
   const err = payload[0]?.value;
   if (err == null) return null;
 
   return (
     <div className="clean-tooltip">
-      <div className="tooltip-title">{label} UTC</div>
+      <div className="tooltip-title">{d?.time || d?.displayTick} UTC</div>
       <div className="tooltip-line">
         <span>Forecast Error:</span>
         <span style={{ fontWeight: 600, color: err > 0 ? 'var(--color-warning)' : 'var(--color-actual)' }}>

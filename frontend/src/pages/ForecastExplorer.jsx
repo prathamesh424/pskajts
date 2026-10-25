@@ -409,7 +409,7 @@ export default function ForecastExplorer() {
               </span>
             </div>
 
-            <div style={{ maxHeight: 460, overflowY: 'auto' }}>
+            <div className="dark-scrollbar" style={{ maxHeight: 460, overflowY: 'auto' }}>
               {revisionsMeta.map((rev) => {
                 const isSelected = rev.publishTime === (selectedRevisionTime || gateRevisionTime);
                 return (

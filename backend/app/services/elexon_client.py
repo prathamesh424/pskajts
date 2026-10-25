@@ -10,7 +10,12 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any
 
-from app.config import ELEXON_BASE_URL, CACHE_TTL
+from app.config import (
+    ELEXON_BASE_URL,
+    CACHE_TTL,
+    ENABLE_DISK_CACHE,
+    CACHE_DIR_PATH,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +26,17 @@ import os
 from pathlib import Path
 
 # Disk cache directory
-CACHE_DIR = Path(__file__).resolve().parent.parent.parent / "data_cache"
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
+if CACHE_DIR_PATH:
+    CACHE_DIR = Path(CACHE_DIR_PATH)
+else:
+    CACHE_DIR = Path(__file__).resolve().parent.parent.parent / "data_cache"
+
+if ENABLE_DISK_CACHE:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class _Cache:
-    """Two-tier cache: in-memory with file-backed persistence."""
+    """Two-tier cache: in-memory with optional file-backed persistence."""
 
     def __init__(self, ttl: int = CACHE_TTL):
         self._store: dict[str, tuple[float, Any]] = {}
@@ -44,27 +54,31 @@ class _Cache:
                 return value
             del self._store[key]
 
-        # 2. Disk cache check
-        disk_file = self._disk_path(key)
-        if disk_file.exists():
-            try:
-                with open(disk_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    self._store[key] = (time.time(), data)
-                    return data
-            except Exception as e:
-                logger.warning("Failed reading disk cache for %s: %s", key, e)
+        # 2. Disk cache check (if enabled)
+        if ENABLE_DISK_CACHE:
+            disk_file = self._disk_path(key)
+            if disk_file.exists():
+                try:
+                    with open(disk_file, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        self._store[key] = (time.time(), data)
+                        return data
+                except Exception as e:
+                    logger.warning("Failed reading disk cache for %s: %s", key, e)
 
         return None
 
     def set(self, key: str, value: Any) -> None:
         self._store[key] = (time.time(), value)
-        disk_file = self._disk_path(key)
-        try:
-            with open(disk_file, "w", encoding="utf-8") as f:
-                json.dump(value, f)
-        except Exception as e:
-            logger.warning("Failed writing disk cache for %s: %s", key, e)
+
+        # Write to disk cache (if enabled)
+        if ENABLE_DISK_CACHE:
+            disk_file = self._disk_path(key)
+            try:
+                with open(disk_file, "w", encoding="utf-8") as f:
+                    json.dump(value, f)
+            except Exception as e:
+                logger.warning("Failed writing disk cache for %s: %s", key, e)
 
 
 _cache = _Cache()
