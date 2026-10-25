@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ComposedChart, Line, ReferenceLine, Cell
+  ResponsiveContainer, ReferenceLine, Cell
 } from 'recharts';
-import { Target, TrendingDown, Clock, AlertTriangle, ShieldAlert } from 'lucide-react';
 import {
   fetchDailyAccuracy,
   fetchHourlyAccuracy,
@@ -57,7 +56,7 @@ export default function AccuracyAnalysis() {
 
       setSummary(sumRes);
     } catch (err) {
-      setError(err.message || 'Failed to fetch accuracy analytics');
+      setError(err.message || 'Failed loading accuracy metrics');
     } finally {
       setLoading(false);
     }
@@ -68,185 +67,158 @@ export default function AccuracyAnalysis() {
     return d.risk === filterRisk;
   });
 
-  if (loading) return <TerminalLoadingSkeleton />;
+  if (loading) return <AccuracySkeleton />;
   if (error) return (
-    <div className="terminal-panel" style={{ borderColor: 'var(--color-danger)', padding: 16 }}>
-      <div style={{ color: 'var(--color-danger)', fontWeight: 600 }}>Error loading accuracy data: {error}</div>
+    <div className="clean-panel" style={{ padding: 20, color: 'var(--color-danger)' }}>
+      Error: {error}
     </div>
   );
 
   return (
     <div>
-      {/* Executive Risk Advisory Banner */}
-      <div className="terminal-callout" style={{ borderLeftColor: 'var(--color-bias-over)' }}>
-        <div>
-          <span className="callout-bold">QUANTITATIVE RISK AUDIT:</span>{' '}
-          Across 744 hours in January 2026, mean absolute forecast error was{' '}
-          <strong style={{ color: 'var(--text-bright)' }}>2,123 MW</strong> with RMSE of{' '}
-          <strong style={{ color: 'var(--text-bright)' }}>2,617 MW</strong>.
-          Forecast inaccuracy accelerates during the UK evening peak (16:00–19:00), precisely when wholesale power prices reach maximum premium.
-        </div>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>
-          ALGORITHM: VECTORIZED NUMPY MATRIX
-        </div>
-      </div>
-
-      {/* Accuracy Metric Ribbon */}
-      <div className="kpi-ribbon" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
-        <div className="kpi-cell">
-          <div className="kpi-cell-top">
-            <span className="kpi-cell-label">MEAN ABSOLUTE ERROR</span>
-            <span className="kpi-cell-badge badge-neutral">MAE</span>
+      {/* 4 Clean Metric Cards */}
+      <div className="kpi-grid-4">
+        <div className="kpi-box">
+          <div className="kpi-box-header">
+            <span className="kpi-box-title">MEAN ABS. ERROR</span>
+            <span className="kpi-pill">MAE</span>
           </div>
-          <div className="kpi-cell-main">
-            <span className="kpi-num">{summary?.mae?.toLocaleString()}</span>
-            <span className="kpi-unit">MW</span>
+          <div className="kpi-box-value">
+            <span className="kpi-val-number">{summary?.mae?.toLocaleString()}</span>
+            <span className="kpi-val-unit">MW</span>
           </div>
-          <div className="kpi-cell-sub">
-            <span>EXPECTED HOURLY VOLATILITY</span>
+          <div className="kpi-box-footer">
+            <span>Average volume deviation</span>
           </div>
         </div>
 
-        <div className="kpi-cell">
-          <div className="kpi-cell-top">
-            <span className="kpi-cell-label">ROOT MEAN SQUARE ERROR</span>
-            <span className="kpi-cell-badge badge-warning">RMSE</span>
+        <div className="kpi-box">
+          <div className="kpi-box-header">
+            <span className="kpi-box-title">ROOT MEAN SQUARE</span>
+            <span className="kpi-pill">RMSE</span>
           </div>
-          <div className="kpi-cell-main">
-            <span className="kpi-num">{summary?.rmse?.toLocaleString()}</span>
-            <span className="kpi-unit">MW</span>
+          <div className="kpi-box-value">
+            <span className="kpi-val-number">{summary?.rmse?.toLocaleString()}</span>
+            <span className="kpi-val-unit">MW</span>
           </div>
-          <div className="kpi-cell-sub">
-            <span>PENALIZES TAIL SWINGS</span>
-          </div>
-        </div>
-
-        <div className="kpi-cell">
-          <div className="kpi-cell-top">
-            <span className="kpi-cell-label">MEAN ABS. PERCENTAGE ERROR</span>
-            <span className="kpi-cell-badge badge-neutral">MAPE</span>
-          </div>
-          <div className="kpi-cell-main">
-            <span className="kpi-num">{summary?.mape?.toFixed(2)}</span>
-            <span className="kpi-unit">%</span>
-          </div>
-          <div className="kpi-cell-sub">
-            <span>ACCURACY: {(100 - summary?.mape).toFixed(1)}%</span>
+          <div className="kpi-box-footer">
+            <span>Heavy penalty on large misses</span>
           </div>
         </div>
 
-        <div className="kpi-cell">
-          <div className="kpi-cell-top">
-            <span className="kpi-cell-label">SYSTEMATIC MODEL BIAS</span>
-            <span className="kpi-cell-badge badge-warning">OVER-FORECAST</span>
+        <div className="kpi-box">
+          <div className="kpi-box-header">
+            <span className="kpi-box-title">PERCENTAGE ERROR</span>
+            <span className="kpi-pill">MAPE</span>
           </div>
-          <div className="kpi-cell-main">
-            <span className="kpi-num" style={{ color: 'var(--color-bias-over)' }}>
+          <div className="kpi-box-value">
+            <span className="kpi-val-number">{summary?.mape?.toFixed(2)}</span>
+            <span className="kpi-val-unit">%</span>
+          </div>
+          <div className="kpi-box-footer">
+            <span>Accuracy: {(100 - summary?.mape).toFixed(1)}%</span>
+          </div>
+        </div>
+
+        <div className="kpi-box">
+          <div className="kpi-box-header">
+            <span className="kpi-box-title">SYSTEM BIAS</span>
+            <span className="kpi-pill" style={{ color: 'var(--color-warning)' }}>OVER-FORECAST</span>
+          </div>
+          <div className="kpi-box-value">
+            <span className="kpi-val-number" style={{ color: 'var(--color-warning)' }}>
               +{summary?.bias?.toLocaleString()}
             </span>
-            <span className="kpi-unit">MW</span>
+            <span className="kpi-val-unit">MW</span>
           </div>
-          <div className="kpi-cell-sub">
-            <span>AVERAGE POWER DEFICIT</span>
+          <div className="kpi-box-footer">
+            <span>Persistent structural deficit</span>
           </div>
         </div>
       </div>
 
-      {/* Row 1: Diurnal Profile & Error Distribution */}
-      <div className="grid-half">
-        {/* Left: 24-Hour Diurnal Accuracy Profile */}
-        <div className="terminal-panel">
-          <div className="panel-header">
-            <div className="panel-title-area">
-              <span className="panel-title">24-Hour Diurnal Accuracy Profile</span>
-              <span className="panel-subtitle font-mono">| BY HOUR-OF-DAY (00–23 UTC)</span>
+      {/* Row 1: Diurnal Profile & Distribution Side-by-Side */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
+        {/* Diurnal Profile */}
+        <div className="clean-panel" style={{ marginBottom: 0 }}>
+          <div className="clean-panel-header">
+            <div>
+              <span className="panel-heading">24-Hour Diurnal Error Profile</span>
+              <span className="panel-meta font-mono">| By Hour-of-Day (00–23 UTC)</span>
             </div>
-            <div className="panel-actions">
-              <span className="legend-chip">
-                <span className="legend-square" style={{ background: '#f59e0b' }} />
-                <span>16:00–19:00 PEAK RISK</span>
-              </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontFamily: 'var(--font-mono)' }}>
+              <span style={{ width: 8, height: 8, background: '#f59e0b', borderRadius: 2 }} />
+              <span style={{ color: '#f59e0b' }}>16:00–19:00 Peak</span>
             </div>
           </div>
-          <div className="panel-body">
-            <div className="chart-box-medium">
+          <div className="clean-panel-body">
+            <div style={{ width: '100%', height: 260 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={hourly} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="2 2" stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="hourLabel" tick={{ fill: '#64748b', fontSize: 10, fontFamily: 'var(--font-mono)' }} tickLine={false} interval={2} />
-                  <YAxis tick={{ fill: '#64748b', fontSize: 10, fontFamily: 'var(--font-mono)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v / 1000).toFixed(1)}k`} />
+                <BarChart data={hourly} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="2 2" stroke="var(--border-subtle)" />
+                  <XAxis dataKey="hourLabel" tick={{ fill: '#71717a', fontSize: 10, fontFamily: 'var(--font-mono)' }} tickLine={false} interval={2} />
+                  <YAxis tick={{ fill: '#71717a', fontSize: 10, fontFamily: 'var(--font-mono)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v / 1000).toFixed(1)}k`} />
                   <Tooltip content={<HourlyTooltip />} />
                   <Bar dataKey="mae" name="MAE (MW)">
                     {hourly.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.isPeak ? '#f59e0b' : '#334155'} />
+                      <Cell key={`cell-${index}`} fill={entry.isPeak ? '#f59e0b' : '#3f3f46'} />
                     ))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
-            </div>
-            <div style={{ marginTop: 8, fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-              NOTE: Amber columns denote UK evening peak demand window (16:00–19:00) where forecast error averages 2,420 MW.
             </div>
           </div>
         </div>
 
-        {/* Right: Error Frequency Histogram */}
-        <div className="terminal-panel">
-          <div className="panel-header">
-            <div className="panel-title-area">
-              <span className="panel-title">Error Distribution &amp; Asymmetry</span>
-              <span className="panel-subtitle font-mono">| HISTOGRAM BINS: (FORECAST - ACTUAL)</span>
+        {/* Error Distribution */}
+        <div className="clean-panel" style={{ marginBottom: 0 }}>
+          <div className="clean-panel-header">
+            <div>
+              <span className="panel-heading">Error Distribution</span>
+              <span className="panel-meta font-mono">| (Forecast − Actual)</span>
             </div>
-            <div className="panel-actions">
-              <span className="font-mono" style={{ fontSize: 10, color: 'var(--color-bias-over)' }}>
-                72.3% OVER-FORECAST SKEW
-              </span>
-            </div>
+            <span className="font-mono" style={{ fontSize: 11, color: 'var(--color-warning)' }}>
+              72.3% OVER-FORECAST
+            </span>
           </div>
-          <div className="panel-body">
-            <div className="chart-box-medium">
+          <div className="clean-panel-body">
+            <div style={{ width: '100%', height: 260 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={distribution} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="2 2" stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 9, fontFamily: 'var(--font-mono)' }} tickLine={false} />
-                  <YAxis tick={{ fill: '#64748b', fontSize: 10, fontFamily: 'var(--font-mono)' }} tickLine={false} axisLine={false} />
+                <BarChart data={distribution} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="2 2" stroke="var(--border-subtle)" />
+                  <XAxis dataKey="label" tick={{ fill: '#71717a', fontSize: 9, fontFamily: 'var(--font-mono)' }} tickLine={false} />
+                  <YAxis tick={{ fill: '#71717a', fontSize: 10, fontFamily: 'var(--font-mono)' }} tickLine={false} axisLine={false} />
                   <Tooltip content={<DistTooltip />} />
-                  <ReferenceLine x="0k" stroke="#64748b" strokeDasharray="2 2" />
-                  <Bar dataKey="count" name="Hours Count">
+                  <ReferenceLine x="0k" stroke="#71717a" strokeDasharray="2 2" />
+                  <Bar dataKey="count" name="Hours">
                     {distribution.map((entry, index) => (
-                      <Cell key={`dist-${index}`} fill={entry.isPositive ? 'rgba(245, 158, 11, 0.7)' : 'rgba(139, 92, 246, 0.6)'} />
+                      <Cell key={`dist-${index}`} fill={entry.isPositive ? 'rgba(245, 158, 11, 0.65)' : 'rgba(168, 85, 247, 0.6)'} />
                     ))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
-            </div>
-            <div style={{ marginTop: 8, fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--color-bias-under)' }}>◄ Under-forecast (Surplus Power)</span>
-              <span style={{ color: 'var(--color-bias-over)' }}>Over-forecast (Shortfall Deficit) ►</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Row 2: Daily Accuracy Ledger Table */}
-      <div className="terminal-panel">
-        <div className="panel-header">
-          <div className="panel-title-area">
-            <span className="panel-title">Daily Forecast Accuracy Ledger</span>
-            <span className="panel-subtitle font-mono">| AUDITED ACROSS ALL 31 CALENDAR DAYS</span>
+      <div className="clean-panel">
+        <div className="clean-panel-header">
+          <div>
+            <span className="panel-heading">Daily Accuracy Ledger</span>
+            <span className="panel-meta font-mono">| 31 Days Breakdown</span>
           </div>
 
-          <div className="panel-actions">
-            <div className="filter-btn-group">
-              <button className={`filter-btn ${filterRisk === 'all' ? 'active' : ''}`} onClick={() => setFilterRisk('all')}>ALL DAYS (31)</button>
-              <button className={`filter-btn ${filterRisk === 'HIGH' ? 'active' : ''}`} onClick={() => setFilterRisk('HIGH')}>HIGH RISK (MAE &gt; 3.5 GW)</button>
-              <button className={`filter-btn ${filterRisk === 'LOW' ? 'active' : ''}`} onClick={() => setFilterRisk('LOW')}>CALM (MAE &lt; 1.8 GW)</button>
-            </div>
+          <div className="filter-btn-group">
+            <button className={`filter-btn ${filterRisk === 'all' ? 'active' : ''}`} onClick={() => setFilterRisk('all')}>ALL (31)</button>
+            <button className={`filter-btn ${filterRisk === 'HIGH' ? 'active' : ''}`} onClick={() => setFilterRisk('HIGH')}>HIGH RISK</button>
+            <button className={`filter-btn ${filterRisk === 'LOW' ? 'active' : ''}`} onClick={() => setFilterRisk('LOW')}>STABLE</button>
           </div>
         </div>
 
-        <div className="terminal-table-wrap">
-          <table className="terminal-table">
+        <div className="clean-table-wrap">
+          <table className="clean-table">
             <thead>
               <tr>
                 <th>DELIVERY DATE</th>
@@ -258,7 +230,7 @@ export default function AccuracyAnalysis() {
                 <th>MAPE (%)</th>
                 <th>BIAS (MW)</th>
                 <th>MAX ERROR</th>
-                <th>RISK STATUS</th>
+                <th>STATUS</th>
               </tr>
             </thead>
             <tbody>
@@ -268,18 +240,20 @@ export default function AccuracyAnalysis() {
                   <td>{row.hours}h</td>
                   <td>{row.avg_actual?.toLocaleString()} MW</td>
                   <td>{row.avg_forecast?.toLocaleString()} MW</td>
-                  <td style={{ fontWeight: 700, color: row.mae > 3500 ? 'var(--color-danger)' : 'var(--text-bright)' }}>
+                  <td style={{ fontWeight: 700, color: row.mae > 3500 ? 'var(--color-danger)' : 'var(--text-white)' }}>
                     {row.mae?.toLocaleString()}
                   </td>
                   <td>{row.rmse?.toLocaleString()}</td>
                   <td>{row.mape?.toFixed(1)}%</td>
-                  <td style={{ color: row.bias > 0 ? 'var(--color-bias-over)' : 'var(--color-bias-under)' }}>
+                  <td style={{ color: row.bias > 0 ? 'var(--color-warning)' : 'inherit' }}>
                     {row.bias > 0 ? `+${row.bias.toLocaleString()}` : row.bias?.toLocaleString()}
                   </td>
                   <td>{row.max_error?.toLocaleString()} MW</td>
                   <td>
-                    <span className={`kpi-cell-badge ${row.risk === 'HIGH' ? 'badge-warning' : row.risk === 'LOW' ? 'badge-actual' : 'badge-neutral'}`}>
-                      {row.risk === 'HIGH' ? 'VOLATILE' : row.risk === 'LOW' ? 'STABLE' : 'MODERATE'}
+                    <span className="kpi-pill" style={{
+                      color: row.risk === 'HIGH' ? 'var(--color-danger)' : row.risk === 'LOW' ? 'var(--color-actual)' : 'var(--text-secondary)'
+                    }}>
+                      {row.risk}
                     </span>
                   </td>
                 </tr>
@@ -294,28 +268,22 @@ export default function AccuracyAnalysis() {
 
 function HourlyTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
-  const data = payload[0]?.payload;
+  const d = payload[0]?.payload;
   return (
-    <div className="terminal-tooltip">
-      <div className="tooltip-time">HOUR {label} UTC</div>
-      <div className="tooltip-row">
-        <span>MEAN ERROR (MAE):</span>
-        <span className="tooltip-val">{data?.mae?.toLocaleString()} MW</span>
+    <div className="clean-tooltip">
+      <div className="tooltip-title">Hour {label} UTC</div>
+      <div className="tooltip-line">
+        <span>MAE:</span>
+        <span style={{ fontWeight: 600, color: 'var(--text-white)' }}>{d?.mae?.toLocaleString()} MW</span>
       </div>
-      <div className="tooltip-row">
-        <span>MAPE:</span>
-        <span className="tooltip-val">{data?.mape?.toFixed(1)}%</span>
-      </div>
-      <div className="tooltip-row">
-        <span>BIAS:</span>
-        <span className="tooltip-val" style={{ color: data?.bias > 0 ? 'var(--color-bias-over)' : 'inherit' }}>
-          {data?.bias > 0 ? `+${data?.bias?.toLocaleString()}` : data?.bias?.toLocaleString()} MW
+      <div className="tooltip-line">
+        <span>Bias:</span>
+        <span style={{ color: d?.bias > 0 ? 'var(--color-warning)' : 'inherit' }}>
+          {d?.bias > 0 ? `+${d?.bias?.toLocaleString()}` : d?.bias?.toLocaleString()} MW
         </span>
       </div>
-      {data?.isPeak && (
-        <div style={{ marginTop: 4, fontSize: 9, color: '#f59e0b', fontWeight: 600 }}>
-          CRITICAL UK PEAK DEMAND WINDOW
-        </div>
+      {d?.isPeak && (
+        <div style={{ marginTop: 4, fontSize: 10, color: '#f59e0b' }}>UK Evening Peak Demand</div>
       )}
     </div>
   );
@@ -325,34 +293,25 @@ function DistTooltip({ active, payload }) {
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload;
   return (
-    <div className="terminal-tooltip">
-      <div className="tooltip-time">RANGE: {d?.bin_start?.toFixed(0)} to {d?.bin_end?.toFixed(0)} MW</div>
-      <div className="tooltip-row">
-        <span>OCCURRENCE:</span>
-        <span className="tooltip-val">{d?.count} hours ({d?.percentage}%)</span>
-      </div>
-      <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>
-        {d?.isPositive ? 'Over-forecasted (Shortfall Risk)' : 'Under-forecasted (Surplus)'}
+    <div className="clean-tooltip">
+      <div className="tooltip-title">Range: {d?.bin_start?.toFixed(0)} to {d?.bin_end?.toFixed(0)} MW</div>
+      <div className="tooltip-line">
+        <span>Count:</span>
+        <span style={{ fontWeight: 600, color: 'var(--text-white)' }}>{d?.count} hours ({d?.percentage}%)</span>
       </div>
     </div>
   );
 }
 
-function TerminalLoadingSkeleton() {
+function AccuracySkeleton() {
   return (
     <div>
-      <div className="kpi-ribbon" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+      <div className="kpi-grid-4">
         {[1, 2, 3, 4].map(i => (
-          <div key={i} className="kpi-cell" style={{ height: 90 }}>
-            <div className="terminal-skeleton" style={{ width: '50%', height: 12, marginBottom: 8 }} />
-            <div className="terminal-skeleton" style={{ width: '70%', height: 26 }} />
-          </div>
+          <div key={i} className="clean-skeleton" style={{ height: 100 }} />
         ))}
       </div>
-      <div className="grid-half">
-        <div className="terminal-panel" style={{ height: 320 }}><div className="terminal-skeleton" style={{ width: '100%', height: '100%' }} /></div>
-        <div className="terminal-panel" style={{ height: 320 }}><div className="terminal-skeleton" style={{ width: '100%', height: '100%' }} /></div>
-      </div>
+      <div className="clean-skeleton" style={{ height: 320 }} />
     </div>
   );
 }
