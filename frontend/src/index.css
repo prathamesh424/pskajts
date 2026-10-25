@@ -141,12 +141,26 @@ body {
   gap: 12px;
 }
 
+.brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-icon-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-white);
+}
+
 .brand-title {
   font-family: var(--font-mono);
   font-weight: 700;
   font-size: 14px;
   letter-spacing: 0.08em;
   color: var(--text-white);
+  line-height: 1;
 }
 
 .brand-tag {
@@ -157,6 +171,8 @@ body {
   padding: 2px 8px;
   border-radius: var(--radius-sm);
   background: var(--bg-card);
+  line-height: 1.4;
+  letter-spacing: 0.04em;
 }
 
 .market-status-bar {
