@@ -1,5 +1,7 @@
-# 🛠️ WindSight — Internal Technical Lead Architecture & Code Review
+# WindSight — Internal Technical Lead Architecture & Code Review
+
 ## System Design, Implementation Details, and Code Quality Walkthrough
+
 **Target Audience**: Internal Technical Lead / Principal Software Engineer  
 **Duration**: 5 Minutes  
 **Stack**: React 19 (Vite) + FastAPI (Python 3.11/3.13) + Docker Compose + Nginx  
@@ -47,6 +49,7 @@ graph TD
 ## 2. Key Domain & Data Engineering Challenges Solved
 
 ### A. Temporal Resolution Mismatch (30-min vs 1-hour)
+
 - **Problem**: Elexon `FUELHH` outturn generation reports in 30-minute settlement periods (48 periods per day). Elexon `WINDFOR` forecasts are hourly (24 periods per day).
 - **Solution** (`data_processor.py::aggregate_actuals_to_hourly`):
   Each 30-minute actual is mapped to its floored hour bucket `YYYY-MM-DDTHH:00:00Z` and aggregated using an arithmetic mean:
@@ -54,6 +57,7 @@ graph TD
   This matches standard EMR and BSC settlement alignment practices.
 
 ### B. Gate Closure Lookahead Bias Prevention
+
 - **Problem**: WINDFOR publishes rolling forecast updates every 2 to 4 hours. Comparing actuals with a forecast published 1 hour before real-time delivery would be fraudulent for a day-ahead procurement evaluation!
 - **Solution** (`data_processor.py::select_latest_forecast_per_hour`):
   For any delivery day $D$, the UK day-ahead auction gate closure occurs on $D-1$ at 11:00 UTC.
@@ -64,6 +68,7 @@ graph TD
   This strictly guarantees **zero lookahead bias** and accurately replicates the information available to traders at bid time.
 
 ### C. Performance, Streaming, & Two-Tier Caching
+
 - **Problem**: Fetching 1 month of half-hourly actuals (1,488 records) and multi-revision hourly forecasts (19,272 records) directly from Elexon can take 8-15 seconds and risks rate limits.
 - **Solution** (`elexon_client.py::_Cache`):
   Implemented a two-tier caching architecture:
@@ -115,11 +120,13 @@ All accuracy metrics are computed using vectorized `NumPy` routines for speed an
 ## 5. Automated Testing Suite
 
 The backend includes a comprehensive 17-test suite using `pytest`:
+
 - **`test_accuracy.py`**: Unit tests for summary metrics, edge cases (zero values, empty lists), daily groupings, and hourly binning.
 - **`test_data_processor.py`**: Validates 30-min to 1-hour aggregation, gate-closure cutoff enforcement, and forecast revision sorting.
 - **`test_api.py`**: FastAPI `TestClient` tests mocking external Elexon calls to verify HTTP contracts, status codes, and schema validation.
 
 All 17 tests execute in **< 0.8 seconds**:
+
 ```bash
 pytest tests/ -v
 # 17 passed in 0.69s
@@ -133,6 +140,7 @@ pytest tests/ -v
 - **Frontend Dockerfile**: Multi-stage build (`node:20-alpine` $\rightarrow$ `nginx:alpine`), includes custom `nginx.conf` with reverse proxy rule `/api/` $\rightarrow$ `backend:8000/api/`.
 - **Docker Compose**: Orchestrates both containers with health checks, network bridges, and environment variables.
 - **One-Command Launch**:
+
   ```bash
   docker-compose up --build
   ```
@@ -142,6 +150,7 @@ pytest tests/ -v
 ## 7. Future Production Roadmap
 
 If expanding this beyond the MVP into enterprise production:
+
 1. **Granular BM Unit Modeling**: Ingest individual offshore/onshore wind farm telemetry (Hornsea, Dogger Bank, Seagreen).
 2. **Machine Learning Bias Correction**: Train an XGBoost or LightGBM post-processing layer to subtract the diurnal +1.8 GW bias from raw weather forecasts.
 3. **Automated Trading Alerts**: Webhook alerts to Slack/Teams when forecast revision dispersion exceeds $\pm 1,500\text{ MW}$ in the final 4 hours before gate closure.
